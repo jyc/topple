@@ -1,0 +1,5 @@
+# begin mk META
+requires = "utop batteries pcre toml"
+archive(byte) = "topple.cma"
+archive(native) = "topple.cmxa"
+# end

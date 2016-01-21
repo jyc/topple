@@ -1,0 +1,5 @@
+# begin mk _tags
+true: package(utop), package(batteries), package(pcre), package(toml)
+# end
+
+true: thread, safe_string

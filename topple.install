@@ -1,0 +1,4 @@
+bin: [
+  "topup.bash" {"topup"}
+  "src/_build/main.native" {"topple"}
+]

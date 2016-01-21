@@ -1,0 +1,16 @@
+# The project name. Used to name library files, the top binary, and the docdir.
+project = "topple"
+# The ocamlfind package name.
+package = "topple"
+# A list of ocamlfind packages required by this project.
+requires = [
+    "unix",
+
+    "toml",
+    "pcre",
+    "batteries",
+
+    "utop",
+]
+# A list of additional flags to pass to ocamlbuild.
+flags = []

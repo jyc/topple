@@ -1,0 +1,19 @@
+opam-version: "1.2"
+name: "topple"
+version: "0.1.0"
+maintainer: "Jonathan Chan <jyc@fastmail.fm>"
+authors: "Jonathan Chan <jyc@fastmail.fm>"
+homepage: "https://github.com/jonathanyc/topple"
+bug-reports: "https://github.com/jonathanyc/topple/issues"
+license: "2-Clause BSD"
+dev-repo: "https://github.com/jonathanyc/topple.git"
+build: [
+  ["car" "opt"]
+]
+depends: [
+  "ocamlfind" {build}
+  "car" {build}
+  "toml" {>= "4.0.0" & < "5.0.0"}
+  "pcre" {>= "7.1.6" & < "8.0.0"}
+  "batteries" {>= "2.4.0" & < "3.0.0"}
+]
