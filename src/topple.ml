@@ -34,6 +34,9 @@ module Graph = struct
     try snd @@ Hashtbl.find g path
     with Not_found -> []
 
+  let mem g path =
+    Hashtbl.mem g path
+
   let paths g =
     let marks : (string, unit) Hashtbl.t = Hashtbl.create 0 in
     let marked = Hashtbl.mem marks in
