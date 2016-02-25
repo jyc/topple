@@ -1,8 +1,8 @@
 # begin mk .merlin
 S .
 B _build
-PKG utop
-PKG batteries
-PKG pcre
+PKG unix
 PKG toml
+PKG pcre
+PKG batteries
 # end

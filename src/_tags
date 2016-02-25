@@ -1,5 +1,5 @@
 # begin mk _tags
-true: package(utop), package(batteries), package(pcre), package(toml)
+true: package(unix), package(toml), package(pcre), package(batteries)
 # end
 
 true: thread, safe_string

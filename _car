@@ -4,13 +4,11 @@ project = "topple"
 package = "topple"
 # A list of ocamlfind packages required by this project.
 requires = [
-    "unix",
+    "unix"
 
-    "toml",
-    "pcre",
-    "batteries",
-
-    "utop",
+    "toml"
+    "pcre"
+    "batteries"
 ]
 # A list of additional flags to pass to ocamlbuild.
 flags = []
