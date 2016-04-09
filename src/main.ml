@@ -98,7 +98,7 @@ let run ~force ~direct =
           string_of_int @@ Topple.hash_path globs path
         end else if not (Sys.file_exists vfile) then err_no_version vfile path
         else begin
-          logv @@ sprintf "Using version file for %s." vfile ;
+          logv @@ sprintf "Using version file for %s." path ;
           Option.get @@ Topple.load_version vfile
         end
       in
