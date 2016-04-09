@@ -58,13 +58,9 @@ Topple is written in OCaml. If you have OPAM,
 
 # Automatic Versioning
 
-Starting with version 0.3.0, Topple has support for "automatic versioning" of
-directories based on glob patterns.
-Topple derives a tree of filenames that match a positive pattern and do not
-match any negative patterns then hashes the tree with the last modification
-time of the files in the tree.
-This approach takes care of deletion of files in addition to addition of files,
-unlike the naive approach that only considers modification times.
+Starting with version 0.3.0, Topple has support for "automatic versioning" of directories based on glob patterns.
+Topple derives a tree of filenames that match a positive pattern and do not match any negative patterns then hashes the tree with the last modification time of the files in the tree.
+This approach takes care of deletion of files in addition to addition of files, unlike the naive approach that only considers modification times.
 
 The syntax is as follows:
 
@@ -76,8 +72,7 @@ The syntax is as follows:
         <command>
         ...
 
-... for example, we can add a subproject `core` whose version depends on all of
-the `*.ml` files except for `tileAuto.ml`, which is generated:
+... for example, we can add a subproject `core` whose version depends on all of the `*.ml` files except for `tileAuto.ml`, which is generated:
 
     *.ml !tileAuto.ml
     core:
@@ -86,8 +81,20 @@ the `*.ml` files except for `tileAuto.ml`, which is generated:
 The hash is then stored instead of the version number in the `.topple-status` file.
 The presence of patterns overrides the existence of a `.topple-version` file.
 
+# Really, what's the use?
+
+As far as I know, Make is great for when:
+
+1. You want to generate an artifact by running some commands,
+2. you can easily query the modification time of the artifact,
+3. you can easily query the modification times of the inputs,
+4. so you can compare the last modification time of an input with that of the artifact in order to determine whether or not you need to run the commands again.
+
+This works for almost every project I've ever worked on. Unfortunately, I was working on an OCaml project with subprojects that installed as findlib packages (why I had to do this was another story!)
+It seemed pretty terrible to have Make check the modification times of the files that findlib installed, somewhere deep in `~/.opam/...`, to the modification times of files in my project.
+I could have had the commands create a "phony" file that served only to mark the last time the commands installing the subproject was run, but I decided I might as well have fun writing this instead.
+
 # To Do
 
-- Better parsing of the _topple file. It'd be nice to allow escapes in more
-  places.
+- Better parsing of the _topple file. It'd be nice to allow escapes in more places.
 - Add support for Git-style `**`-patterns.
