@@ -90,3 +90,4 @@ The presence of patterns overrides the existence of a `.topple-version` file.
 
 - Better parsing of the _topple file. It'd be nice to allow escapes in more
   places.
+- Add support for Git-style `**`-patterns.
