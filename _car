@@ -6,8 +6,8 @@ package = "topple"
 requires = [
     "unix"
 
-    "toml"
-    "pcre"
+    "re"
+    "re.glob"
     "batteries"
 ]
 # A list of additional flags to pass to ocamlbuild.

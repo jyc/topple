@@ -3,6 +3,7 @@ S .
 B _build
 PKG unix
 PKG toml
-PKG pcre
+PKG re
+PKG re.glob
 PKG batteries
 # end

@@ -1,5 +1,6 @@
+open Batteries
 open Printf
-open Topple
+module Graph = Topple.Graph
 
 let graph_file = "_topple"
 let status_file = ".topple-status"
@@ -60,7 +61,7 @@ let rand_version () =
   in
   let s = Bytes.make 32 ' ' in
   for i = 0 to 31 do
-    s.[i] <- Char.chr (rand ())
+    Bytes.set s i (Char.chr (rand ()))
   done ;
   Bytes.to_string s
 
@@ -85,22 +86,27 @@ let run ~force ~direct =
     else topup path
   ) direct ;
 
-  let status = hashtbl_of_alist @@ load_status status_file in
+  let status = Topple.hashtbl_of_alist @@ Topple.load_status status_file in
   let update =
     Graph.paths graph
-    |> BatList.filter_map (fun path ->
-      let vfile = Filename.concat path version_file in
-      if not (Sys.file_exists vfile) then err_no_version vfile path
-      else
-        begin match load_version vfile with
-        | None -> err_no_version vfile path
-        | Some version ->
-          match Hashtbl.find status path with
-          | version' ->
-            if force || version' <> version then Some (path, version)
-            else None
-          | exception Not_found -> Some (path, version)
+    |> List.filter_map (fun path ->
+      let version =
+        let vfile = Filename.concat path version_file in
+        let globs = Graph.globs graph path in
+        if globs <> [] then begin
+          logv @@ sprintf "Using globs for %s." path ;
+          string_of_int @@ Topple.hash_path globs path
+        end else if not (Sys.file_exists vfile) then err_no_version vfile path
+        else begin
+          logv @@ sprintf "Using version file for %s." vfile ;
+          Option.get @@ Topple.load_version vfile
         end
+      in
+      match Hashtbl.find status path with
+      | version' ->
+        if force || version' <> version then Some (path, version)
+        else None
+      | exception Not_found -> Some (path, version)
     )
   in
   let dirty = List.map (fun (path, _) -> path) update in
@@ -158,7 +164,7 @@ let run ~force ~direct =
   logv @@ sprintf "Successful: %s" (String.concat ", " successful) ;
   logv @@ sprintf "To retry: %s" (String.concat ", " retry) ;
 
-  update_status status_file updated retry
+  Topple.update_status status_file updated retry
 
 let () =
   Random.self_init () ;

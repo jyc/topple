@@ -1,6 +1,7 @@
 alpha: beta gamma
     echo "rebuilding alpha"
 
+foo, bar
 beta: gamma
     echo "rebuilding beta"
 

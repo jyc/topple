@@ -1,3 +1,4 @@
+open Batteries
 open Printf
 
 let with_input inp thunk =
@@ -21,18 +22,35 @@ let with_output out thunk =
 module Graph = struct
 
   (* deps, commands *)
-  type t = (string, string list * string list) Hashtbl.t
+  type node = {
+    path : string;
+    deps : string list;
+    commands : string list;
+    (* If [globs] is the empty list, then we should look for a .topple-status
+       file instead of using [hash_path]..
+       Each entry is (glob, pos). If [pos] is true, a file matching the glob is
+       included. If [pos] is false, a file matching the glob is excluded. *)
+    globs : (string * bool) list;
+  }
+  type t = (string, node) Hashtbl.t
 
-  let add ~commands ~deps g path =
-    Hashtbl.replace g path (commands, deps)
+  let create () =
+    Hashtbl.create 17
+
+  let add ~path ~deps ~commands ~globs g =
+    Hashtbl.replace g path { path; deps; commands; globs }
+
+  let path g path =
+    (Hashtbl.find g path).path
 
   let deps g path =
-    try fst @@ Hashtbl.find g path
-    with Not_found -> []
+    (Hashtbl.find g path).deps
 
   let commands g path =
-    try snd @@ Hashtbl.find g path
-    with Not_found -> []
+    (Hashtbl.find g path).commands
+
+  let globs g path =
+    (Hashtbl.find g path).globs
 
   let mem g path =
     Hashtbl.mem g path
@@ -41,7 +59,7 @@ module Graph = struct
     let marks : (string, unit) Hashtbl.t = Hashtbl.create 0 in
     let marked = Hashtbl.mem marks in
     let mark n = Hashtbl.replace marks n () in
-    Hashtbl.fold (fun n (ms, _) paths ->
+    Hashtbl.fold (fun n { deps } paths ->
       if marked n then paths
       else begin
         mark n ;
@@ -51,26 +69,24 @@ module Graph = struct
             mark m ;
             m :: paths
           end
-        ) (n :: paths) ms
+        ) (n :: paths) deps
       end
     ) g []
 
-  let colon_re = Pcre.regexp ":"
-  let ws_re = Pcre.regexp {|\s+|}
-  let comment_re = Pcre.regexp {|^((?:[^\\#]|\\#|\\\\)*)(?:#.*)?$|}
-  let comment_subst = Pcre.subst "$1"
+  let ws_re = Re.(compile (rep1 space))
+  let comment_re = Re.(compile (seq [char '#'; rep any; eol]))
 
   let load path =
     let inp = open_in path in
     let rec get_line () =
       try
         input_line inp 
-        |> Pcre.replace ~rex:comment_re ~itempl:comment_subst
+        |> Re.replace_string comment_re ~by:""
       with End_of_file ->
-        raise BatEnum.No_more_elements
+        raise Enum.No_more_elements
     in
     (* Wrap the input stream so we can peek and delete comments. *)
-    let ins = BatEnum.from get_line in
+    let ins = Enum.from get_line in
 
     let rec read_path_deps path deps =
       let handle path deps_string =
@@ -79,18 +95,18 @@ module Graph = struct
         if n = 0 then (path, deps)
         else if deps_string.[n - 1] = '\\' then
           let deps' = String.sub deps_string 0 (n - 1) in
-          read_path_deps (Some path) (Pcre.split ~rex:ws_re deps' @ deps)
-        else (path, Pcre.split ~rex:ws_re deps_string @ deps)
+          read_path_deps (Some path) (Re.split ws_re deps' @ deps)
+        else (path, Re.split ws_re deps_string @ deps)
       in
       match path with
       | None ->
-        let s = BatEnum.get_exn ins in
-        begin match Pcre.split ~rex:colon_re ~max:2 s with
-        | [path; deps_string] -> handle path deps_string
-        | _ -> failwith @@ sprintf "Expected '<path>: <dep> ...', got '%s'." s 
+        let s = Enum.get_exn ins in
+        begin match String.split s ~by:":" with
+        | path, deps_string -> handle path deps_string
+        | exception Not_found -> failwith @@ sprintf "Expected '<path>: <dep> ...', got '%s'." s 
         end
       | Some path ->
-        let s = BatEnum.get_exn ins in
+        let s = Enum.get_exn ins in
         handle path s
     in
 
@@ -98,40 +114,60 @@ module Graph = struct
       let finish () =
         List.rev commands
       in
-      match BatEnum.peek ins with
+      match Enum.peek ins with
       | None | Some "" -> finish ()
       | Some s ->
         begin match s.[0] with
         | ' ' | '\t' ->
-          BatEnum.junk ins ;
+          Enum.junk ins ;
           read_commands (String.trim s :: commands)
         | _ ->
           finish ()
         end
     in
 
-    let ht = Hashtbl.create 0 in
+    let g = create () in
     let rec loop () =
-      match BatEnum.peek ins with
+      match Enum.peek ins with
       | None -> ()
       | Some "" ->
-        BatEnum.junk ins ;
+        Enum.junk ins ;
         loop ()
       | Some _ ->
+        let globs =
+          let next = Option.get @@ Enum.peek ins in
+          let has_globs =
+            (* If there's a colon in the line and it comes before the first
+               space or the end of the line (ci < si), then this looks like:
+                 roboerror:
+               Otherwise it's a glob line (command lines come after). *)
+            let ci = try String.index next ':' with Not_found -> max_int in
+            let si = try String.index next ' ' with Not_found -> max_int in
+            ci >= si
+          in
+          if has_globs then begin
+            Enum.junk ins ;
+            String.nsplit next ~by:" "
+            |> List.map (fun s ->
+              if s.[0] = '!' then String.sub s 1 (String.length s - 1), false
+              else s, true
+            )
+          end else []
+        in
         let path, deps = read_path_deps None [] in
         let commands = read_commands [] in
-        Hashtbl.replace ht path (deps, commands) ;
+        add ~path ~deps ~commands ~globs g ;
         loop ()
     in
 
     with_input inp (fun () ->
       loop () ;
-      ht
+      g
     )
 
   (* Oof... *)
   exception Chosen of string
-  exception Cyclical of string
+  exception Cyclic of string
 
   let sort g =
     let unvisited : (string, unit) Hashtbl.t = Hashtbl.create 0 in
@@ -147,7 +183,7 @@ module Graph = struct
     let rec visit n =
       match Hashtbl.find marks n with
       | `Permanent -> ()
-      | `Temporary -> raise (Cyclical n)
+      | `Temporary -> raise (Cyclic n)
       | `Unmarked ->
         mark n `Temporary ;
         List.iter (fun m ->
@@ -164,7 +200,7 @@ module Graph = struct
         loop ()
       end
     in
-    Hashtbl.iter (fun n (deps, _) -> 
+    Hashtbl.iter (fun n { deps } -> 
       Hashtbl.replace unvisited n () ;
       Hashtbl.replace marks n `Unmarked ;
       List.iter (fun m ->
@@ -184,7 +220,7 @@ module Graph = struct
     let rec visit n =
       match Hashtbl.find marks n with
       | `Permanent -> ()
-      | `Temporary -> raise (Cyclical n)
+      | `Temporary -> raise (Cyclic n)
       | `Unmarked ->
         mark n `Temporary ;
         let ms =
@@ -199,22 +235,22 @@ module Graph = struct
     in
 
     (* Create g' (g with directions of edges reversed. *)
-    Hashtbl.iter (fun n (ms, _) ->
+    Hashtbl.iter (fun n { deps } ->
       List.iter (fun m ->
         let old =
           try Hashtbl.find g' m
           with Not_found -> []
         in
         Hashtbl.replace g' m (n :: old)
-      ) ms
+      ) deps
     ) g ;
 
     (* Initialize [marks]. *)
-    Hashtbl.iter (fun n (ms, _) -> 
+    Hashtbl.iter (fun n { deps } -> 
       Hashtbl.replace marks n `Unmarked ;
       List.iter (fun m ->
         Hashtbl.replace marks m `Unmarked ;
-      ) ms
+      ) deps
     ) g ;
 
     List.iter visit ns ;
@@ -275,7 +311,7 @@ let update_status path update retry =
   let retry' = hashset_of_list retry in
 
   let lines = 
-    try BatList.of_enum @@ BatFile.lines_of path
+    try List.of_enum @@ File.lines_of path
     with Sys_error _ -> []
   in
   let out = open_out path in
@@ -311,3 +347,29 @@ let update_status path update retry =
     loop lines
   )
 
+let hash_path globs path =
+  let res = List.map (fun (glob, pos) ->
+    let re = Re.compile @@ Re_glob.glob ~anchored:true ~expand_braces:true glob in
+    re, pos
+  ) globs
+  in
+  let pos, neg =
+    Util.partition (fun (glob, pos) ->
+      if pos then `Left glob
+      else `Right glob
+    ) res
+  in
+  let pred x =
+    List.exists (fun re -> Re.execp re x) pos &&
+    not (List.exists (fun re -> Re.execp re x) neg)
+  in
+  let trees = Dirtree.trees path ~pred in
+  let t =
+    List.fold_left (fun t tree ->
+      Dirtree.fold (fun t e ->
+        let path = Filename.concat path (Dirtree.top e) in
+        max t (Unix.stat path).Unix.st_mtime
+      ) t tree
+    ) 0. trees
+  in
+  Hashtbl.hash (t, trees)

@@ -1,5 +1,5 @@
 # begin mk META
-requires = "unix toml pcre batteries"
+requires = "unix toml re re.glob batteries"
 archive(byte) = "topple.cma"
 archive(native) = "topple.cmxa"
 # end

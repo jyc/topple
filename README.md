@@ -51,7 +51,42 @@ When you run `topple` in the directory with a `_topple` file it'll rebuild every
 
 Topple is written in OCaml. If you have OPAM,
 
-    git clone https://github.com/jonathanyc/topple.git
-    opam pin add topple topple
+    $ git clone https://github.com/jonathanyc/topple.git
+    $ opam pin add topple topple
 
 ... should both install dependencies and install `topple` and `topup` to your `$PATH`.
+
+# Automatic Versioning
+
+Starting with version 0.3.0, Topple has support for "automatic versioning" of
+directories based on glob patterns.
+Topple derives a tree of filenames that match a positive pattern and do not
+match any negative patterns then hashes the tree with the last modification
+time of the files in the tree.
+This approach takes care of deletion of files in addition to addition of files,
+unlike the naive approach that only considers modification times.
+
+The syntax is as follows:
+
+    <pos> ::= <glob>
+    <neg> ::= !<glob>
+    
+    <pos | neg>
+    <subproject>: <dep> ...
+        <command>
+        ...
+
+... for example, we can add a subproject `core` whose version depends on all of
+the `*.ml` files except for `tileAuto.ml`, which is generated:
+
+    *.ml !tileAuto.ml
+    core:
+        echo "Building core subproject!"
+
+The hash is then stored instead of the version number in the `.topple-status` file.
+The presence of patterns overrides the existence of a `.topple-version` file.
+
+# To Do
+
+- Better parsing of the _topple file. It'd be nice to allow escapes in more
+  places.

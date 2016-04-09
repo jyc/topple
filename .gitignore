@@ -1,3 +1,4 @@
 src/_build/
 *.native
 *.byte
+*.top
