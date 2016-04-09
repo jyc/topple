@@ -2,7 +2,6 @@
 S .
 B _build
 PKG unix
-PKG toml
 PKG re
 PKG re.glob
 PKG batteries

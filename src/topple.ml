@@ -27,10 +27,8 @@ module Graph = struct
     deps : string list;
     commands : string list;
     (* If [globs] is the empty list, then we should look for a .topple-status
-       file instead of using [hash_path]..
-       Each entry is (glob, pos). If [pos] is true, a file matching the glob is
-       included. If [pos] is false, a file matching the glob is excluded. *)
-    globs : (string * bool) list;
+       file instead of using [hash_path].. *)
+    globs : string list;
   }
   type t = (string, node) Hashtbl.t
 
@@ -148,10 +146,6 @@ module Graph = struct
           if has_globs then begin
             Enum.junk ins ;
             String.nsplit next ~by:" "
-            |> List.map (fun s ->
-              if s.[0] = '!' then String.sub s 1 (String.length s - 1), false
-              else s, true
-            )
           end else []
         in
         let path, deps = read_path_deps None [] in
@@ -348,28 +342,16 @@ let update_status path update retry =
   )
 
 let hash_path globs path =
-  let res = List.map (fun (glob, pos) ->
-    let re = Re.compile @@ Re_glob.glob ~anchored:true ~expand_braces:true glob in
-    re, pos
-  ) globs
+  let files =
+    Glob.glob globs path
+    |> List.sort String.compare
   in
-  let pos, neg =
-    Util.partition (fun (glob, pos) ->
-      if pos then `Left glob
-      else `Right glob
-    ) res
-  in
-  let pred x =
-    List.exists (fun re -> Re.execp re x) pos &&
-    not (List.exists (fun re -> Re.execp re x) neg)
-  in
-  let trees = Dirtree.trees path ~pred in
   let t =
-    List.fold_left (fun t tree ->
-      Dirtree.fold (fun t e ->
-        let path = Filename.concat path (Dirtree.top e) in
-        max t (Unix.stat path).Unix.st_mtime
-      ) t tree
-    ) 0. trees
+    List.fold_left (fun t path ->
+      (* Exclude directories, because their mtimes can change when a file we've
+         ignored is modified/created. *)
+      if Sys.is_directory path then t
+      else max t (Unix.stat path).Unix.st_mtime
+    ) 0. files
   in
-  Hashtbl.hash (t, trees)
+  Hashtbl.hash (t, files)
