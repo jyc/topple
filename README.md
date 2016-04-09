@@ -97,4 +97,4 @@ I could have had the commands create a "phony" file that served only to mark the
 # To Do
 
 - Better parsing of the _topple file. It'd be nice to allow escapes in more places.
-- Add support for Git-style `**`-patterns.
+- More tests for Glob.
